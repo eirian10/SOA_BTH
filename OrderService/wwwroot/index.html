@@ -1,0 +1,215 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Hệ Thống SOA - Quản Lý Đơn Hàng</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 0 15px;
+            background: #f4f6f9;
+        }
+
+        .card {
+            background: white;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #1e3a8a;
+            font-size: 18px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+        }
+
+        input, select, button {
+            padding: 8px 12px;
+            margin: 5px 5px 5px 0;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+            button:hover {
+                background: #1d4ed8;
+            }
+
+            button.del {
+                background: #dc2626;
+            }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background: #f1f5f9;
+        }
+
+        .status-ok {
+            color: green;
+            font-weight: bold;
+        }
+
+        .status-err {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>1. Đăng nhập lấy Token (AuthService - Port 5000)</h2>
+        <input type="text" id="username" value="admin" placeholder="Username">
+        <input type="password" id="password" value="123456" placeholder="Password">
+        <button onclick="login()">Đăng nhập</button>
+        <p id="authStatus" class="status-err">Chưa đăng nhập</p>
+    </div>
+
+    <div class="card">
+        <h2>2. Danh sách Sản phẩm trong kho (ProductService - Port 5001)</h2>
+        <button onclick="loadProducts()">Tải lại kho hàng</button>
+        <table>
+            <thead><tr><th>ID</th><th>Tên sản phẩm</th><th>Giá</th><th>Tồn kho</th></tr></thead>
+            <tbody id="productTable"></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>3. Tạo Đơn Hàng Mới (OrderService - Port 5002)</h2>
+        <input type="text" id="cusName" placeholder="Tên khách hàng" value="Nguyễn Thị Như">
+        <input type="email" id="cusEmail" placeholder="Email" value="nhu@gmail.com"><br>
+        <input type="number" id="prodId" placeholder="ID Sản phẩm (vd: 1)" value="1">
+        <input type="number" id="qty" placeholder="Số lượng mua" value="2">
+        <button onclick="createOrder()">Tạo Đơn Hàng</button>
+        <p id="orderMsg"></p>
+    </div>
+
+    <div class="card">
+        <h2>4. Danh sách Đơn Hàng</h2>
+        <button onclick="loadOrders()">Tải danh sách đơn</button>
+        <table>
+            <thead><tr><th>ID</th><th>Khách hàng</th><th>Chi tiết</th><th>Tổng tiền</th><th>Trạng thái</th><th>Hành động</th></tr></thead>
+            <tbody id="orderTable"></tbody>
+        </table>
+    </div>
+
+    <script>
+        let jwtToken = "";
+
+        async function login() {
+            const u = document.getElementById("username").value;
+            const p = btoa(document.getElementById("password").value); // Mã hóa Base64 theo đề bài 2
+            const res = await fetch("http://localhost:5000/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userName: u, password: p })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                jwtToken = data.token;
+                document.getElementById("authStatus").innerText = "Đã đăng nhập! Token sẵn sàng.";
+                document.getElementById("authStatus").className = "status-ok";
+                loadProducts();
+                loadOrders();
+            } else {
+                alert(data.message || "Lỗi đăng nhập");
+            }
+        }
+
+        async function loadProducts() {
+            const res = await fetch("http://localhost:5001/products");
+            const list = await res.json();
+            document.getElementById("productTable").innerHTML = list.map(p =>
+                `<tr><td>${p.id}</td><td>${p.name}</td><td>${p.price.toLocaleString()}đ</td><td><b>${p.quantity}</b></td></tr>`
+            ).join("");
+        }
+
+        async function createOrder() {
+            const payload = {
+                customerName: document.getElementById("cusName").value,
+                customerEmail: document.getElementById("cusEmail").value,
+                items: [{
+                    productId: parseInt(document.getElementById("prodId").value),
+                    quantity: parseInt(document.getElementById("qty").value)
+                }]
+            };
+            const res = await fetch("http://localhost:5002/orders", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": "Bearer " + jwtToken },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const msgEl = document.getElementById("orderMsg");
+            if (res.ok) {
+                msgEl.innerText = "Tạo đơn thành công! Mã đơn: #" + data.id;
+                msgEl.className = "status-ok";
+                loadOrders();
+            } else {
+                msgEl.innerText = "Lỗi: " + (data.message || "Không thể tạo đơn");
+                msgEl.className = "status-err";
+            }
+        }
+
+        async function loadOrders() {
+            const res = await fetch("http://localhost:5002/orders", {
+                headers: { "Authorization": "Bearer " + jwtToken }
+            });
+            if (!res.ok) return;
+            const list = await res.json();
+            document.getElementById("orderTable").innerHTML = list.map(o => `
+                <tr>
+                    <td>#${o.id}</td>
+                    <td>${o.customerName}<br><small>${o.customerEmail}</small></td>
+                    <td>${o.orderItems.map(i => `${i.productName} (x${i.quantity})`).join(", ")}</td>
+                    <td>${o.totalAmount.toLocaleString()}đ</td>
+                    <td><b>${o.status}</b></td>
+                    <td>
+                        <button onclick="updateStatus(${o.id}, 'completed')">Hoàn thành</button>
+                        <button class="del" onclick="deleteOrder(${o.id})">Xóa</button>
+                    </td>
+                </tr>
+            `).join("");
+        }
+
+        async function updateStatus(id, status) {
+            await fetch(`http://localhost:5002/orders/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", "Authorization": "Bearer " + jwtToken },
+                body: JSON.stringify({ status })
+            });
+            loadOrders();
+        }
+
+        async function deleteOrder(id) {
+            await fetch(`http://localhost:5002/orders/${id}`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + jwtToken }
+            });
+            loadOrders();
+        }
+    </script>
+</body>
+</html>
