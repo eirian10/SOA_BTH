@@ -2,11 +2,11 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Test Hệ Thống SOA - Quản Lý Đơn Hàng</title>
+    <title>Test Hệ Thống SOA - Full 4 Services</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 900px;
+            max-width: 950px;
             margin: 20px auto;
             padding: 0 15px;
             background: #f4f6f9;
@@ -49,6 +49,10 @@
 
             button.del {
                 background: #dc2626;
+            }
+
+            button.rep {
+                background: #059669;
             }
 
         table {
@@ -98,21 +102,39 @@
     </div>
 
     <div class="card">
-        <h2>3. Tạo Đơn Hàng Mới (OrderService - Port 5002)</h2>
+        <h2>3. Quản lý Đơn Hàng (OrderService - Port 5002)</h2>
         <input type="text" id="cusName" placeholder="Tên khách hàng" value="Nguyễn Thị Như">
         <input type="email" id="cusEmail" placeholder="Email" value="nhu@gmail.com"><br>
-        <input type="number" id="prodId" placeholder="ID Sản phẩm (vd: 1)" value="1">
+        <input type="number" id="prodId" placeholder="ID Sản phẩm" value="1">
         <input type="number" id="qty" placeholder="Số lượng mua" value="2">
         <button onclick="createOrder()">Tạo Đơn Hàng</button>
         <p id="orderMsg"></p>
-    </div>
-
-    <div class="card">
-        <h2>4. Danh sách Đơn Hàng</h2>
-        <button onclick="loadOrders()">Tải danh sách đơn</button>
         <table>
             <thead><tr><th>ID</th><th>Khách hàng</th><th>Chi tiết</th><th>Tổng tiền</th><th>Trạng thái</th><th>Hành động</th></tr></thead>
             <tbody id="orderTable"></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>4. Dịch Vụ Báo Cáo Doanh Thu & Lợi Nhuận (ReportService - Port 5003)</h2>
+        <div>
+            <b>Tạo báo cáo Đơn hàng:</b>
+            <input type="number" id="repOrderId" placeholder="Nhập ID Đơn hàng" value="1">
+            <button class="rep" onclick="createOrderReport()">Tạo Báo Cáo Đơn</button>
+        </div>
+        <table>
+            <thead><tr><th>ID Báo cáo</th><th>ID Đơn hàng</th><th>Doanh thu</th><th>Chi phí (70%)</th><th>Lợi nhuận</th><th>Xóa</th></tr></thead>
+            <tbody id="orderReportTable"></tbody>
+        </table>
+
+        <div style="margin-top: 15px;">
+            <b>Tạo báo cáo Sản phẩm:</b>
+            <input type="number" id="repProdId" placeholder="Nhập ID Sản phẩm" value="1">
+            <button class="rep" onclick="createProductReport()">Tạo Báo Cáo Sản Phẩm</button>
+        </div>
+        <table>
+            <thead><tr><th>ID Báo cáo</th><th>ID Sản phẩm</th><th>Đã bán</th><th>Doanh thu</th><th>Chi phí</th><th>Lợi nhuận</th><th>Xóa</th></tr></thead>
+            <tbody id="productReportTable"></tbody>
         </table>
     </div>
 
@@ -121,7 +143,7 @@
 
         async function login() {
             const u = document.getElementById("username").value;
-            const p = btoa(document.getElementById("password").value); // Mã hóa Base64 theo đề bài 2
+            const p = btoa(document.getElementById("password").value);
             const res = await fetch("http://localhost:5000/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -134,6 +156,7 @@
                 document.getElementById("authStatus").className = "status-ok";
                 loadProducts();
                 loadOrders();
+                loadReports();
             } else {
                 alert(data.message || "Lỗi đăng nhập");
             }
@@ -180,18 +203,18 @@
             if (!res.ok) return;
             const list = await res.json();
             document.getElementById("orderTable").innerHTML = list.map(o => `
-                <tr>
-                    <td>#${o.id}</td>
-                    <td>${o.customerName}<br><small>${o.customerEmail}</small></td>
-                    <td>${o.orderItems.map(i => `${i.productName} (x${i.quantity})`).join(", ")}</td>
-                    <td>${o.totalAmount.toLocaleString()}đ</td>
-                    <td><b>${o.status}</b></td>
-                    <td>
-                        <button onclick="updateStatus(${o.id}, 'completed')">Hoàn thành</button>
-                        <button class="del" onclick="deleteOrder(${o.id})">Xóa</button>
-                    </td>
-                </tr>
-            `).join("");
+                    <tr>
+                        <td>#${o.id}</td>
+                        <td>${o.customerName}<br><small>${o.customerEmail}</small></td>
+                        <td>${o.orderItems.map(i => `${i.productName} (x${i.quantity})`).join(", ")}</td>
+                        <td>${o.totalAmount.toLocaleString()}đ</td>
+                        <td><b>${o.status}</b></td>
+                        <td>
+                            <button onclick="updateStatus(${o.id}, 'completed')">Hoàn thành</button>
+                            <button class="del" onclick="deleteOrder(${o.id})">Xóa</button>
+                        </td>
+                    </tr>
+                `).join("");
         }
 
         async function updateStatus(id, status) {
@@ -209,6 +232,65 @@
                 headers: { "Authorization": "Bearer " + jwtToken }
             });
             loadOrders();
+        }
+
+        async function createOrderReport() {
+            const orderId = parseInt(document.getElementById("repOrderId").value);
+            const res = await fetch("http://localhost:5003/reports/orders", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": "Bearer " + jwtToken },
+                body: JSON.stringify({ orderId })
+            });
+            if (res.ok) loadReports();
+            else alert((await res.json()).message);
+        }
+
+        async function createProductReport() {
+            const productId = parseInt(document.getElementById("repProdId").value);
+            const res = await fetch("http://localhost:5003/reports/products", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": "Bearer " + jwtToken },
+                body: JSON.stringify({ productId })
+            });
+            if (res.ok) loadReports();
+            else alert((await res.json()).message);
+        }
+
+        async function loadReports() {
+            const [resO, resP] = await Promise.all([
+                fetch("http://localhost:5003/reports/orders", { headers: { "Authorization": "Bearer " + jwtToken } }),
+                fetch("http://localhost:5003/reports/products", { headers: { "Authorization": "Bearer " + jwtToken } })
+            ]);
+            if (resO.ok) {
+                const listO = await resO.json();
+                document.getElementById("orderReportTable").innerHTML = listO.map(r => `
+                        <tr>
+                            <td>#${r.id}</td><td>Đơn #${r.orderId}</td>
+                            <td>${r.totalRevenue.toLocaleString()}đ</td><td>${r.totalCost.toLocaleString()}đ</td>
+                            <td><b>${r.totalProfit.toLocaleString()}đ</b></td>
+                            <td><button class="del" onclick="deleteReport('orders', ${r.id})">Xóa</button></td>
+                        </tr>
+                    `).join("");
+            }
+            if (resP.ok) {
+                const listP = await resP.json();
+                document.getElementById("productReportTable").innerHTML = listP.map(r => `
+                        <tr>
+                            <td>#${r.id}</td><td>SP #${r.productId}</td><td>${r.totalSold}</td>
+                            <td>${r.revenue.toLocaleString()}đ</td><td>${r.cost.toLocaleString()}đ</td>
+                            <td><b>${r.profit.toLocaleString()}đ</b></td>
+                            <td><button class="del" onclick="deleteReport('products', ${r.id})">Xóa</button></td>
+                        </tr>
+                    `).join("");
+            }
+        }
+
+        async function deleteReport(type, id) {
+            await fetch(`http://localhost:5003/reports/${type}/${id}`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + jwtToken }
+            });
+            loadReports();
         }
     </script>
 </body>
